@@ -3,11 +3,12 @@ use secp256k1::SecretKey;
 use std::str::FromStr;
 use std::convert::TryInto;
 use std::time;
+use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::HashMap;
 use std::fs::File;
 use web3::transports::Http;
-use web3::types::{Address, H256, TransactionParameters, Bytes, U256};
+use web3::types::{Address, H256, TransactionParameters, Bytes, U256, FilterBuilder, Log};
 use web3::{Web3};
 use web3::contract::{Contract, Options};
 use futures::StreamExt;
@@ -46,6 +47,7 @@ struct Agent{
 }
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // env::set_var("RUST_BACKTRACE", "1");
     setup_logger("logs/output.log").unwrap();
 
     info!("Initializing...");
@@ -79,7 +81,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         hasher.finalize(&mut result);
         event_topics.push(H256(result));
     }
-    // println!("Event topics: {:?}", event_topics);
+
+    // let past_events = get_past_events(&web3, contract_address, event_topics.clone(), 3365860, 3370760).await;
+
     let filter = web3::types::FilterBuilder::default()
         .address(vec![contract_address])
         .topics(Some(event_topics.clone()), None, None, None)
@@ -97,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let raw_data = &tx_log.data.0[..];
             if tx_log.topics[0] == event_topics[0] {
                 // transaction received
-                let data = ethabi::decode(&[ParamType::Bytes, ParamType::Uint(256), ParamType::Array(Box::new(ParamType::Uint(16))), ParamType::Bytes, ParamType::Bytes, ParamType::Array(Box::new(ParamType::Bytes))], raw_data).unwrap();
+                let data = ethabi::decode(&[ParamType::Uint(256), ParamType::Bytes, ParamType::Uint(256), ParamType::Array(Box::new(ParamType::Uint(16))), ParamType::Bytes, ParamType::Bytes, ParamType::Array(Box::new(ParamType::Bytes))], raw_data).unwrap();
                 info!("Transaction received event detected. Transaction data: {:?}", data);
                 // convert data
                 let id = data[0].clone().into_uint().unwrap().as_u64();
@@ -106,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let share_holders: Vec<u64> = data[3].clone().into_array().unwrap().into_iter().map(|holder| holder.into_uint().unwrap().as_u64()).collect();
                 let g1r: [u8; 48] = data[4].clone().into_bytes().unwrap()[..48].try_into().unwrap();
                 let g2r: [u8; 96] = data[5].clone().into_bytes().unwrap()[..96].try_into().unwrap();
+                // TODO: This can go wrong. Handle exception here.
                 let g1r_point = G1Projective::from(G1Affine::from_compressed(&g1r).unwrap());
                 let g2r_point = G2Projective::from(G2Affine::from_compressed(&g2r).unwrap());
                 let alphas: Vec<Vec<u8>> = data[6].clone().into_array().unwrap().into_iter().map(|holder| holder.into_bytes().unwrap()).collect();
@@ -123,6 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // push task
                 let task = Task{id, message, decryption_time, share_holders, g1r: g1r_point, g2r: g2r_point, alphas: alphas_bytes, shares, submitted: false};
                 tasks.insert(id, task);
+                info!{"Task {} added to tasks list.", id};
             }
             else if tx_log.topics[0] == event_topics[1] {
                 // share received
@@ -139,6 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let task = tasks.get_mut(&tx_id).unwrap();
                         task.shares.insert(member, Share{x: member, y: share_point});
                         if task.shares.len() >= get_threshold(task.share_holders.len() as u64) as usize{
+                            info!("Task {} with decryption time {} completed.", tx_id, task.decryption_time);
                             let tmp_lct = task.decryption_time;
                             tasks.remove(&tx_id);
                             let mut is_new_lct: bool = true;
@@ -152,6 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             if is_new_lct && (tmp_lct > lct){
                                 lct = tmp_lct;
+                                info!("Latest confirmed time updated to {}.", lct);
                             }
                         }
                     }
@@ -197,7 +205,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     else{
                         // enough shares received
                         tasks.remove(&id);
-                        info!("Task {} completed.", id);
+                        info!("Task {} removed.", id);
                     }
                 }
             }
@@ -225,7 +233,7 @@ async fn submit_share(web3: &Web3<Http>, index: u64, contract: Address, sk: &str
     let prvk = SecretKey::from_str(sk).unwrap();
     let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
     let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
-    println!("Tx succeeded with hash: {}", result);
+    info!("Submit share tx succeeded with hash: {}", result);
 }
 async fn dispute_share(web3: &Web3<Http>, contract: Address, sk: &str, tx_id: u64, member_index: u64){
     let transaction_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
@@ -238,7 +246,7 @@ async fn dispute_share(web3: &Web3<Http>, contract: Address, sk: &str, tx_id: u6
     let prvk = SecretKey::from_str(sk).unwrap();
     let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
     let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
-    println!("Tx succeeded with hash: {}", result);
+    info!("Dispute share tx succeeded with hash: {}", result);
 }
 async fn get_agent_list(contract: &Contract<Http>) -> HashMap<u64, Agent>{
     let mut agents: HashMap<u64, Agent> = HashMap::new();
@@ -275,6 +283,18 @@ fn get_share_bytes(task: &Task, index: u64) -> [u8; 48]{
 }
 fn get_threshold(n: u64) -> u64{
     (((n as f32)*0.67).ceil()) as u64
+}
+
+async fn get_past_events(web3: &Web3<Http>, contract_address: Address, event_signatures: Vec<H256>, from_block: u64, to_block: u64) -> Vec<Log>{
+    let filter = FilterBuilder::default()
+        .address(vec![contract_address])
+        .topics(Some(event_signatures), None, None, None)
+        .from_block(web3::types::BlockNumber::from(from_block))
+        .to_block(web3::types::BlockNumber::from(to_block))
+        .build();
+
+    let past_events: Vec<Log> = web3.eth().logs(filter).await.unwrap();
+    return past_events;
 }
 
 

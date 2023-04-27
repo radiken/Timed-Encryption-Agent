@@ -20,9 +20,11 @@ fn main() {
 
     let t: u64 = 3;
     
-    let (k, alphas) = get_k_and_alphas(&r, &pks, t);
+    let (k, mut alphas_rest) = get_k_and_alphas(&r, &pks, t);
     println!("k: {:?}", k);
-    println!("alphas: {:?}", alphas);
+    println!("alphas: {:?}", alphas_rest);
+    let mut alphas: Vec<Scalar> = vec![Scalar::zero(); t as usize];
+    alphas.append(&mut alphas_rest);
 
     // Test recover k
     let shares124 = client_get_shares(&r, &vec![pks[0],pks[1],pks[3]]);
@@ -122,7 +124,7 @@ fn get_k_and_alphas(r: &Scalar, pks: &Vec<G1Projective>, t: u64) -> (Scalar, Vec
     let basis = lagrange_basis(&indexes, Scalar::zero());
     let k = lagrange_interpolate(&basis, &shares);
 
-    let mut alphas: Vec<Scalar> = vec![Scalar::zero(); t as usize];
+    let mut alphas: Vec<Scalar> = vec![];
     for i in t..(pks.len() as u64){
         let i_basis = lagrange_basis(&indexes, Scalar::from(i+1));
         let p = lagrange_interpolate(&i_basis, &shares);
