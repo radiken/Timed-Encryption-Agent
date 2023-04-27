@@ -20,7 +20,7 @@ fn main() {
 
     let t: u64 = 3;
     
-    let (k, mut alphas_rest) = get_k_and_alphas(&r, &pks, t);
+    let (k, mut alphas_rest) = get_k_and_alphas(&r, &vec![1,2,3,4], &pks, t);
     println!("k: {:?}", k);
     println!("alphas: {:?}", alphas_rest);
     let mut alphas: Vec<Scalar> = vec![Scalar::zero(); t as usize];
@@ -118,18 +118,22 @@ pub fn node_get_share(sk: &Scalar, g1r: &G1Projective) -> G1Projective{
     sk*g1r
 }
 
-fn get_k_and_alphas(r: &Scalar, pks: &Vec<G1Projective>, t: u64) -> (Scalar, Vec<Scalar>){
+pub fn get_k_and_alphas(r: &Scalar, indexes: &Vec<u64>, pks: &Vec<G1Projective>, t: u64) -> (Scalar, Vec<Scalar>){
     let shares = client_get_shares(r, pks);
-    let indexes: Vec<u64> = Vec::from_iter(1..t+1);
-    let basis = lagrange_basis(&indexes, Scalar::zero());
+    let first_t_indexes = indexes[0..t as usize].to_vec();
+    let basis = lagrange_basis(&first_t_indexes, Scalar::zero());
     let k = lagrange_interpolate(&basis, &shares);
 
     let mut alphas: Vec<Scalar> = vec![];
-    for i in t..(pks.len() as u64){
-        let i_basis = lagrange_basis(&indexes, Scalar::from(i+1));
+    let rest_indexes = indexes[t as usize..indexes.len()].to_vec();
+    
+    let mut counter = t;
+    for i in rest_indexes{
+        let i_basis = lagrange_basis(&first_t_indexes, Scalar::from(i));
         let p = lagrange_interpolate(&i_basis, &shares);
-        let alpha = p - shares[i as usize].clone();
+        let alpha = p - shares[counter as usize].clone();
         alphas.push(alpha);
+        counter += 1;
     }
     return (k, alphas);
 }
