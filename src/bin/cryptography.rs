@@ -4,7 +4,7 @@ use bls12_381::{G1Affine, G1Projective, Scalar, G2Affine, G2Projective, pairing}
 use std::{convert::TryInto, vec};
 use group::Curve;
 use sha256::digest;
-use hex::FromHex;
+use hex::{FromHex, ToHex};
 use aes_gcm_siv::{Aes256GcmSiv, KeyInit, aead::{Aead, generic_array::GenericArray}};
 
 fn main() {
@@ -58,17 +58,27 @@ fn main() {
 
 }
 
-fn import_pk(pk: &str) -> G1Projective{
+pub fn import_pk(pk: &str) -> G1Projective{
     let bytes = hex::decode(pk).unwrap();
     let array = bytes[..48].try_into().map_err(|_| base64::DecodeError::InvalidLength).unwrap();
     let pk_affine = G1Affine::from_compressed(&array).unwrap();
     return G1Projective::from(pk_affine);
 }
 
-fn export_pk(pk: &G1Projective) -> String{
+pub fn export_pk(pk: &G1Projective) -> String{
     let pk_affine = G1Affine::from(pk);
     let array = G1Affine::to_compressed(&pk_affine);
     return hex::encode(array);
+}
+
+pub fn import_sk(sk: &str) -> Scalar{
+    let bytes = hex::decode(sk).unwrap();
+    let array = bytes[..32].try_into().map_err(|_| base64::DecodeError::InvalidLength).unwrap();
+    Scalar::from_bytes(array).unwrap()
+}
+
+pub fn export_sk(sk: &Scalar) -> String{
+    sk.to_string()
 }
 
 fn batch_get_keypairs(number: u8) -> (Vec<Scalar>, Vec<G1Projective>){
@@ -130,8 +140,9 @@ pub fn get_k_and_alphas(r: &Scalar, indexes: &Vec<u64>, pks: &Vec<G1Projective>,
     let mut counter = t;
     for i in rest_indexes{
         let i_basis = lagrange_basis(&first_t_indexes, Scalar::from(i));
-        let p = lagrange_interpolate(&i_basis, &shares);
-        let alpha = p - shares[counter as usize].clone();
+        let p = lagrange_interpolate(&i_basis, &shares).to_bytes();
+        let alpha_bytes: Vec<u8> = p.iter().zip(shares[counter as usize].clone().to_bytes().iter()).map(|(&x1, &x2)| x1 ^ x2).collect();
+        let alpha = Scalar::from_bytes(&alpha_bytes[..32].try_into().unwrap()).unwrap();
         alphas.push(alpha);
         counter += 1;
     }
@@ -173,8 +184,8 @@ fn recover_k(indexes: &Vec<u64>, shares: &Vec<Scalar>, alphas: &Vec<Scalar>) -> 
     let basis = lagrange_basis(indexes, Scalar::zero());
     let mut terms: Vec<Scalar> = vec![];
     for i in 0..shares.len(){
-        let p = alphas[i].clone()+shares[i].clone();
-        terms.push(p);
+        let p: Vec<u8> =  alphas[i].clone().to_bytes().iter().zip(shares[i].clone().to_bytes().iter()).map(|(&x1, &x2)| x1 ^ x2).collect();
+        terms.push(Scalar::from_bytes(&p[..32].try_into().unwrap()).unwrap());
     }
     let k = lagrange_interpolate(&basis, &terms);
     return k;

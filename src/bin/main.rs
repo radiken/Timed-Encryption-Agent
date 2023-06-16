@@ -7,6 +7,7 @@ use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::HashMap;
 use std::fs::File;
+use dotenv::dotenv;
 use web3::transports::Http;
 use web3::types::{Address, H256, TransactionParameters, Bytes, U256, FilterBuilder, Log};
 use web3::{Web3};
@@ -31,9 +32,7 @@ struct Share{
 }
 struct Task{
     id: u64,
-    message: Vec<u8>,
     decryption_time: u64,
-    share_holders: Vec<u64>,
     g1r: G1Projective,
     g2r: G2Projective,
     alphas: Vec<Scalar>,
@@ -48,27 +47,45 @@ struct Agent{
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // env::set_var("RUST_BACKTRACE", "1");
+    dotenv().ok();
     setup_logger("logs/output.log").unwrap();
+    let JOIN_COMMITTEE = true;
 
     info!("Initializing...");
-    let agent_pk = G1Projective::identity(); // Your public key
-    let agent_sk = Scalar::zero(); // Your private key
-    let address_sk = "";
-    let address_pk = "";
+    let agent_pk = cryptography::import_pk(&std::env::var("AGENT_PK").expect("AGENT_PK must be set."));
+    let agent_sk = cryptography::import_sk(&std::env::var("AGENT_SK").expect("AGENT_SK must be set."));
+    let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
+    let address_pk = &std::env::var("ADDRESS_PK").expect("ADDRESS_PK must be set.");
     let index = 0; // Your member index
-    let contract_address: Address = "0x68924135246a2657d2D4ED6087BE07E521373E97".parse()?;
-    let url = "https://eth-sepolia.g.alchemy.com/v2/KOrm0cOOHPPG2lgnypUIGqG8gUzwn03m";
+    let contract_address: Address = std::env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set.").parse()?;
+    let n = 3;
+    let t = 2;
+    let url = std::env::var("API_URL").expect("API_URL must be set.");
     // Create web3 instance
-    let web3 = Web3::new(web3::transports::Http::new(url)?);
+    let web3 = Web3::new(web3::transports::Http::new(&url)?);
     let f = File::open("./contract_abi")?;
     let ethabi_contract = ethabi::Contract::load(f)?;
     let contract = Contract::new(web3.eth(), contract_address, ethabi_contract);
     let mut tasks: HashMap<u64, Task> = HashMap::new();
     info!("Populating agents list.");
     let mut agents: HashMap<u64, Agent> = get_agent_list(&contract).await;
+
+    // Join committee if myself not in agents list
+    let mut in_committee = false;
+    for (_, agent) in &agents{
+        if agent.pk == agent_pk{
+            in_committee = true;
+            break;
+        }
+    }
+    if !in_committee{
+        let deposit_ether_value = 1;
+        join_committee(&web3, contract_address, &agent_pk, address_sk, deposit_ether_value).await;
+    }
+
     let mut lct: u64 = 0;
     // Create event filter
-    let event1 = "transactionReceived(uint256,bytes,uint256,uint16[],bytes,bytes,bytes[])";
+    let event1 = "transactionReceived(uint256,uint256,bytes,bytes,bytes[])";
     let event2 = "shareRecieved(uint256,uint256,bytes)";
     let event3 = "memberJoined(address,uint256,bytes)";
     let event4 = "memberExited(uint256)";
@@ -105,28 +122,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 info!("Transaction received event detected. Transaction data: {:?}", data);
                 // convert data
                 let id = data[0].clone().into_uint().unwrap().as_u64();
-                let message = data[1].clone().into_bytes().unwrap();
-                let decryption_time = data[2].clone().into_uint().unwrap().as_u64();
-                let share_holders: Vec<u64> = data[3].clone().into_array().unwrap().into_iter().map(|holder| holder.into_uint().unwrap().as_u64()).collect();
-                let g1r: [u8; 48] = data[4].clone().into_bytes().unwrap()[..48].try_into().unwrap();
-                let g2r: [u8; 96] = data[5].clone().into_bytes().unwrap()[..96].try_into().unwrap();
-                // TODO: This can go wrong. Handle exception here.
+                let decryption_time = data[1].clone().into_uint().unwrap().as_u64();
+                let g1r: [u8; 48] = data[2].clone().into_bytes().unwrap()[..48].try_into().unwrap();
+                let g2r: [u8; 96] = data[3].clone().into_bytes().unwrap()[..96].try_into().unwrap();
+                // TODO: This (below) can go wrong. Handle exception here.
                 let g1r_point = G1Projective::from(G1Affine::from_compressed(&g1r).unwrap());
                 let g2r_point = G2Projective::from(G2Affine::from_compressed(&g2r).unwrap());
-                let alphas: Vec<Vec<u8>> = data[6].clone().into_array().unwrap().into_iter().map(|holder| holder.into_bytes().unwrap()).collect();
+                let alphas: Vec<Vec<u8>> = data[4].clone().into_array().unwrap().into_iter().map(|holder| holder.into_bytes().unwrap()).collect();
                 let mut alphas_bytes = vec![];
                 for alpha in alphas{
                     let bytes: [u8; 32] = alpha[..32].try_into().unwrap();
                     alphas_bytes.push(Scalar::from_bytes(&bytes).unwrap());
                 }
                 let mut shares: HashMap<u64, Share> = HashMap::new();
-                if share_holders.iter().any(|x| *x == index){
-                    // calculate own share
-                    let share = Share{x: index, y: cryptography::node_get_share(&agent_sk, &g1r_point)};
-                    shares.insert(index, share);
-                }
+                shares.insert(index, Share{x: index, y: cryptography::node_get_share(&agent_sk, &g1r_point)});
                 // push task
-                let task = Task{id, message, decryption_time, share_holders, g1r: g1r_point, g2r: g2r_point, alphas: alphas_bytes, shares, submitted: false};
+                let task = Task{id, decryption_time, g1r: g1r_point, g2r: g2r_point, alphas: alphas_bytes, shares, submitted: false};
                 tasks.insert(id, task);
                 info!{"Task {} added to tasks list.", id};
             }
@@ -140,33 +151,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let share: [u8; 48] = data[2].clone().into_bytes().unwrap()[..48].try_into().unwrap();
                 let share_point = G1Projective::from(G1Affine::from_compressed(&share).unwrap());
                 // verify and save shares
-                if tasks.get(&tx_id).unwrap().share_holders.iter().any(|x| *x == member){
-                    if cryptography::verify_share(&share_point, &agents.get(&member).unwrap().pk, &tasks.get(&tx_id).unwrap().g2r){
-                        let task = tasks.get_mut(&tx_id).unwrap();
-                        task.shares.insert(member, Share{x: member, y: share_point});
-                        if task.shares.len() >= get_threshold(task.share_holders.len() as u64) as usize{
-                            info!("Task {} with decryption time {} completed.", tx_id, task.decryption_time);
-                            let tmp_lct = task.decryption_time;
-                            tasks.remove(&tx_id);
-                            let mut is_new_lct: bool = true;
-                            let task_keys: Vec<u64> = tasks.keys().cloned().collect();
-                            for id in task_keys {
-                                if let Some(task) = tasks.get_mut(&id) {
-                                    if task.decryption_time < tmp_lct{
-                                        is_new_lct = false;
-                                    }
+                if cryptography::verify_share(&share_point, &agents.get(&member).unwrap().pk, &tasks.get(&tx_id).unwrap().g2r){
+                    let task = tasks.get_mut(&tx_id).unwrap();
+                    task.shares.insert(member, Share{x: member, y: share_point});
+                    if task.shares.len() >= t as usize{
+                        info!("Task {} with decryption time {} completed.", tx_id, task.decryption_time);
+                        let tmp_lct = task.decryption_time;
+                        tasks.remove(&tx_id);
+                        let mut is_new_lct: bool = true;
+                        let task_keys: Vec<u64> = tasks.keys().cloned().collect();
+                        for id in task_keys {
+                            if let Some(task) = tasks.get_mut(&id) {
+                                if task.decryption_time < tmp_lct{
+                                    is_new_lct = false;
                                 }
                             }
-                            if is_new_lct && (tmp_lct > lct){
-                                lct = tmp_lct;
-                                info!("Latest confirmed time updated to {}.", lct);
-                            }
+                        }
+                        if is_new_lct && (tmp_lct > lct){
+                            lct = tmp_lct;
+                            info!("Latest confirmed time updated to {}.", lct);
                         }
                     }
-                    else{
-                        info!("Invalid share from {} for task {}!", member, tx_id);
-                        dispute_share(&web3, contract_address, address_sk, tx_id, member).await;
-                    }
+                }
+                else{
+                    info!("Invalid share from {} for task {}!", member, tx_id);
+                    dispute_share(&web3, contract_address, address_sk, tx_id, member).await;
                 }
             }
             else if tx_log.topics[0] == event_topics[2] {
@@ -195,8 +204,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         for id in task_keys {
             if let Some(task) = tasks.get_mut(&id) {
                 if time > task.decryption_time {
-                    if task.shares.len() < get_threshold(task.share_holders.len() as u64) as usize{
-                        if (!task.submitted) && task.share_holders.iter().any(|x| *x == index){
+                    if task.shares.len() < t as usize{
+                        if (!task.submitted){
                             submit_share(&web3, index, contract_address, address_sk, &task, lct).await;
                             task.submitted = true;
                             info!("Share submitted for task id {}.", id);
@@ -219,6 +228,19 @@ fn get_time() -> u64{
     let since_the_epoch = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
     return since_the_epoch.as_secs();
 }
+// value unit is eth
+async fn join_committee(web3: &Web3<Http>, contract: Address, agent_pk: &G1Projective, address_sk: &str, value: u64){
+    let public_key = Param{name: "publicKey".to_string(), kind: ParamType::Bytes, internal_type: None};
+    let func = ethabi::Function{name: "joinCommittee".to_string(), inputs: vec![public_key], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
+    
+    let pk_data = Token::Bytes(ethabi::Bytes::from(agent_pk.to_affine().to_compressed()));
+    let data = make_data(&func, &vec![pk_data]);
+    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), value: U256::exp10(18)*value, gas: U256::from(8000000), ..Default::default()};
+    let prvk = SecretKey::from_str(address_sk).unwrap();
+    let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+    let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
+    info!("Join committee tx succeeded with hash: {}", result);
+}
 async fn submit_share(web3: &Web3<Http>, index: u64, contract: Address, sk: &str, task: &Task, latsest_confirmed_time: u64){
     let tx_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
     let secret_share = Param{name: "secret_share".to_string(), kind: ParamType::Bytes, internal_type: None};
@@ -229,11 +251,11 @@ async fn submit_share(web3: &Web3<Http>, index: u64, contract: Address, sk: &str
     let secret_share_data = Token::Bytes(ethabi::Bytes::from(get_share_bytes(task, index)));
     let lct_data = Token::Uint(Uint::from(latsest_confirmed_time));
     let data = make_data(&func, &vec![tx_id_data, secret_share_data, lct_data]);
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), ..Default::default()};
+    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), ..Default::default()};
     let prvk = SecretKey::from_str(sk).unwrap();
     let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
     let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
-    info!("Submit share tx succeeded with hash: {}", result);
+    info!("Submit share tx succeeded with hash: {}", result.to_string());
 }
 async fn dispute_share(web3: &Web3<Http>, contract: Address, sk: &str, tx_id: u64, member_index: u64){
     let transaction_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
@@ -242,11 +264,11 @@ async fn dispute_share(web3: &Web3<Http>, contract: Address, sk: &str, tx_id: u6
     let tx_id_data = Token::Uint(Uint::from(tx_id));
     let member_index_data = Token::Uint(Uint::from(member_index));
     let data = make_data(&func, &vec![tx_id_data, member_index_data]);
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), ..Default::default()};
+    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), ..Default::default()};
     let prvk = SecretKey::from_str(sk).unwrap();
     let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
     let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
-    info!("Dispute share tx succeeded with hash: {}", result);
+    info!("Dispute share tx succeeded with hash: {}", result.to_string());
 }
 async fn get_agent_list(contract: &Contract<Http>) -> HashMap<u64, Agent>{
     let mut agents: HashMap<u64, Agent> = HashMap::new();
@@ -280,9 +302,6 @@ fn make_data(func: &Function, data: &Vec<Token>) -> Bytes{
 }
 fn get_share_bytes(task: &Task, index: u64) -> [u8; 48]{
     task.shares.get(&index).unwrap().y.to_affine().to_compressed()
-}
-fn get_threshold(n: u64) -> u64{
-    (((n as f32)*0.67).ceil()) as u64
 }
 
 async fn get_past_events(web3: &Web3<Http>, contract_address: Address, event_signatures: Vec<H256>, from_block: u64, to_block: u64) -> Vec<Log>{
