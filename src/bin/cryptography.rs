@@ -74,7 +74,7 @@ pub fn export_pk(pk: &G1Projective) -> String{
 pub fn import_sk(sk: &str) -> Scalar{
     let bytes = hex::decode(sk).unwrap();
     let array = bytes[..32].try_into().map_err(|_| base64::DecodeError::InvalidLength).unwrap();
-    Scalar::from_bytes(array).unwrap()
+    Scalar::from_bytes(&bytes_to_le(array)).unwrap()
 }
 
 pub fn export_sk(sk: &Scalar) -> String{
