@@ -118,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let raw_data = &tx_log.data.0[..];
             if tx_log.topics[0] == event_topics[0] {
                 // transaction received
-                let data = ethabi::decode(&[ParamType::Uint(256), ParamType::Bytes, ParamType::Uint(256), ParamType::Array(Box::new(ParamType::Uint(16))), ParamType::Bytes, ParamType::Bytes, ParamType::Array(Box::new(ParamType::Bytes))], raw_data).unwrap();
+                let data = ethabi::decode(&[ParamType::Uint(256), ParamType::Uint(256), ParamType::Bytes, ParamType::Bytes, ParamType::Array(Box::new(ParamType::Bytes))], raw_data).unwrap();
                 info!("Transaction received event detected. Transaction data: {:?}", data);
                 // convert data
                 let id = data[0].clone().into_uint().unwrap().as_u64();
