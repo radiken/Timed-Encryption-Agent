@@ -1,0 +1,34 @@
+2023-06-16 11:46:12 [main] INFO - Initializing...
+2023-06-16 11:46:12 [main] INFO - Populating agents list.
+2023-06-16 11:46:14 [main] INFO - Initialization completed. Starting main loop.
+2023-06-16 14:02:58 [main] INFO - Initializing...
+2023-06-16 14:02:58 [main] INFO - Populating agents list.
+2023-06-16 14:02:59 [main] INFO - Initialization completed. Starting main loop.
+2023-06-16 14:03:14 [main] INFO - Agent joined event detected. New agent data: [Address(0x4af2eb3e5b1fd9d7ba3f47895354a169dde05bec), Uint(2), Bytes([153, 241, 17, 127, 239, 126, 43, 159, 115, 168, 57, 226, 193, 64, 171, 88, 42, 170, 201, 59, 87, 122, 239, 67, 69, 18, 190, 224, 6, 218, 153, 76, 59, 114, 82, 169, 43, 146, 1, 108, 207, 26, 196, 150, 106, 82, 71, 63])].
+2023-06-16 14:31:30 [main] INFO - Initializing...
+2023-06-16 14:31:30 [main] INFO - Populating agents list.
+2023-06-16 14:31:32 [main] INFO - Initialization completed. Starting main loop.
+2023-06-16 14:47:49 [main] INFO - Agent joined event detected. New agent data: [Address(0x21e0dd95c3c5481ef10422f6826d8d430874f5d7), Uint(3), Bytes([152, 229, 117, 128, 178, 243, 193, 200, 0, 238, 143, 218, 141, 54, 79, 178, 1, 174, 57, 112, 152, 127, 114, 86, 24, 82, 181, 204, 13, 81, 25, 174, 146, 140, 23, 187, 130, 71, 253, 246, 133, 12, 210, 93, 220, 213, 71, 131])].
+2023-06-16 15:28:20 [main] INFO - Initializing...
+2023-06-16 15:28:20 [main] INFO - Populating agents list.
+2023-06-16 15:28:22 [main] INFO - Initialization completed. Starting main loop.
+2023-06-16 15:34:30 [main] INFO - Initializing...
+2023-06-16 15:34:30 [main] INFO - Populating agents list.
+2023-06-16 15:34:32 [main] INFO - Initialization completed. Starting main loop.
+2023-06-16 15:35:01 [main] INFO - Transaction received event detected. Transaction data: [Uint(1), Uint(1686926206), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Array([Bytes([124, 235, 133, 240, 184, 140, 214, 247, 147, 40, 83, 243, 76, 163, 27, 219, 60, 54, 23, 198, 65, 4, 249, 4, 31, 131, 69, 29, 0, 0, 0, 0])])]
+2023-06-16 15:35:01 [main] INFO - Task 1 added to tasks list.
+2023-06-16 15:39:38 [main] INFO - Initializing...
+2023-06-16 15:39:38 [main] INFO - Populating agents list.
+2023-06-16 15:39:40 [main] INFO - Initialization completed. Starting main loop.
+2023-06-16 15:40:01 [main] INFO - Transaction received event detected. Transaction data: [Uint(2), Uint(1686926507), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Array([Bytes([110, 135, 117, 120, 155, 28, 205, 252, 76, 111, 10, 58, 59, 128, 246, 173, 146, 204, 167, 116, 62, 192, 157, 172, 4, 48, 77, 191, 170, 211, 246, 57])])]
+2023-06-16 15:40:01 [main] INFO - Task 2 added to tasks list.
+2023-06-16 15:40:13 [main] INFO - Share received event detected. Share data: [Uint(2), Uint(1), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])]
+2023-06-16 15:49:04 [main] INFO - Initializing...
+2023-06-16 15:49:04 [main] INFO - Populating agents list.
+2023-06-16 15:49:06 [main] INFO - Initialization completed. Starting main loop.
+2023-06-21 14:13:56 [main] INFO - Initializing...
+2023-06-21 14:13:56 [main] INFO - Populating agents list.
+2023-06-21 14:13:58 [main] INFO - Initialization completed. Starting main loop.
+2023-06-21 14:21:37 [main] INFO - Initializing...
+2023-06-21 14:21:37 [main] INFO - Populating agents list.
+2023-06-21 14:21:39 [main] INFO - Initialization completed. Starting main loop.

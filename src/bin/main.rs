@@ -7,6 +7,8 @@ use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::HashMap;
 use std::fs::File;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use dotenv::dotenv;
 use web3::transports::Http;
 use web3::types::{Address, H256, TransactionParameters, Bytes, U256, FilterBuilder, Log};
@@ -24,6 +26,7 @@ use log4rs::{
     encode::pattern::PatternEncoder,
     append::console::ConsoleAppender,
 };
+use tokio::time::{sleep, Duration};
 mod cryptography;
 
 struct Share{
@@ -56,17 +59,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let agent_sk = cryptography::import_sk(&std::env::var("AGENT_SK").expect("AGENT_SK must be set."));
     let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
     let address_pk = &std::env::var("ADDRESS_PK").expect("ADDRESS_PK must be set.");
-    let index = 0; // Your member index
     let contract_address: Address = std::env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set.").parse()?;
     let n = 3;
     let t = 2;
     let url = std::env::var("API_URL").expect("API_URL must be set.");
     // Create web3 instance
-    let web3 = Web3::new(web3::transports::Http::new(&url)?);
+    let web3 = Arc::new(Mutex::new(Web3::new(web3::transports::Http::new(&url)?)));
     let f = File::open("./contract_abi")?;
     let ethabi_contract = ethabi::Contract::load(f)?;
-    let contract = Contract::new(web3.eth(), contract_address, ethabi_contract);
-    let mut tasks: HashMap<u64, Task> = HashMap::new();
+    let contract = Contract::new(web3.lock().await.eth(), contract_address, ethabi_contract);
+    let mut tasks: Arc<Mutex<HashMap<u64, Task>>> = Arc::new(Mutex::new(HashMap::new()));
     info!("Populating agents list.");
     let mut agents: HashMap<u64, Agent> = get_agent_list(&contract).await;
 
@@ -80,10 +82,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if !in_committee{
         let deposit_ether_value = 1;
-        join_committee(&web3, contract_address, &agent_pk, address_sk, deposit_ether_value).await;
+        join_committee(Arc::clone(&web3), contract_address, &agent_pk, address_sk, deposit_ether_value).await;
     }
+    let index = get_index(&contract, agent_pk).await.unwrap(); // Your member index
 
-    let mut lct: u64 = 0;
+    let mut lct: Arc<Mutex<u64>> = Arc::new(Mutex::new(0u64));
     // Create event filter
     let event1 = "transactionReceived(uint256,uint256,bytes,bytes,bytes[])";
     let event2 = "shareRecieved(uint256,uint256,bytes)";
@@ -106,12 +109,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .topics(Some(event_topics.clone()), None, None, None)
         .build();
     // Create a stream for the event
-    let filter = web3.eth_filter().create_logs_filter(filter).await?;
+    let filter = web3.lock().await.eth_filter().create_logs_filter(filter).await?;
     // Read every 1 sec
     let logs_stream = filter.stream(time::Duration::from_secs(1));
     futures::pin_mut!(logs_stream);
     // Main loop
     info!("Initialization completed. Starting main loop.");
+    tokio::spawn(loop_tasks(Arc::clone(&tasks), t, index, Arc::clone(&web3), contract_address, Arc::clone(&lct)));
     loop{
         let log = logs_stream.next().await.unwrap();
         if let Ok(tx_log) = log {
@@ -138,7 +142,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 shares.insert(index, Share{x: index, y: cryptography::node_get_share(&agent_sk, &g1r_point)});
                 // push task
                 let task = Task{id, decryption_time, g1r: g1r_point, g2r: g2r_point, alphas: alphas_bytes, shares, submitted: false};
-                tasks.insert(id, task);
+                let mut released_tasks = tasks.lock().await;
+                released_tasks.insert(id, task);
                 info!{"Task {} added to tasks list.", id};
             }
             else if tx_log.topics[0] == event_topics[1] {
@@ -151,31 +156,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let share: [u8; 48] = data[2].clone().into_bytes().unwrap()[..48].try_into().unwrap();
                 let share_point = G1Projective::from(G1Affine::from_compressed(&share).unwrap());
                 // verify and save shares
-                if cryptography::verify_share(&share_point, &agents.get(&member).unwrap().pk, &tasks.get(&tx_id).unwrap().g2r){
-                    let task = tasks.get_mut(&tx_id).unwrap();
-                    task.shares.insert(member, Share{x: member, y: share_point});
-                    if task.shares.len() >= t as usize{
-                        info!("Task {} with decryption time {} completed.", tx_id, task.decryption_time);
-                        let tmp_lct = task.decryption_time;
-                        tasks.remove(&tx_id);
-                        let mut is_new_lct: bool = true;
-                        let task_keys: Vec<u64> = tasks.keys().cloned().collect();
-                        for id in task_keys {
-                            if let Some(task) = tasks.get_mut(&id) {
-                                if task.decryption_time < tmp_lct{
-                                    is_new_lct = false;
+                let mut released_tasks = tasks.lock().await;
+                if released_tasks.get(&tx_id).is_some(){
+                    if cryptography::verify_share(&share_point, &agents.get(&member).unwrap().pk, &released_tasks.get(&tx_id).unwrap().g2r){
+                        let task = released_tasks.get_mut(&tx_id).unwrap();
+                        task.shares.insert(member, Share{x: member, y: share_point});
+                        if task.shares.len() >= t as usize{
+                            info!("Task {} with decryption time {} completed.", tx_id, task.decryption_time);
+                            let tmp_lct = task.decryption_time;
+                            released_tasks.remove(&tx_id);
+                            let mut is_new_lct: bool = true;
+                            let task_keys: Vec<u64> = released_tasks.keys().cloned().collect();
+                            for id in task_keys {
+                                if let Some(task) = released_tasks.get_mut(&id) {
+                                    if task.decryption_time < tmp_lct{
+                                        is_new_lct = false;
+                                    }
                                 }
                             }
-                        }
-                        if is_new_lct && (tmp_lct > lct){
-                            lct = tmp_lct;
-                            info!("Latest confirmed time updated to {}.", lct);
+                            let mut released_lct = lct.lock().await;
+                            if is_new_lct && (tmp_lct > *released_lct){
+                                *released_lct = tmp_lct;
+                                info!("Latest confirmed time updated to {}.", *released_lct);
+                            }
                         }
                     }
-                }
-                else{
-                    info!("Invalid share from {} for task {}!", member, tx_id);
-                    dispute_share(&web3, contract_address, address_sk, tx_id, member).await;
+                    else{
+                        info!("Invalid share from {} for task {}!", member, tx_id);
+                        dispute_share(Arc::clone(&web3), contract_address, address_sk, tx_id, member).await;
+                    }
                 }
             }
             else if tx_log.topics[0] == event_topics[2] {
@@ -198,29 +207,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 agents.remove(&index);
             }
         }
-        // check if there are tasks to submit
+    }
+    Ok(())
+}
+async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: i32, index: u64, web3: Arc<Mutex<Web3<Http>>>, contract_address: Address, lct: Arc<Mutex<u64>>){
+    let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
+    loop{
         let time = get_time();
-        let task_keys: Vec<u64> = tasks.keys().cloned().collect();
+        let mut released_tasks = tasks.lock().await;
+        let task_keys: Vec<u64> = released_tasks.keys().cloned().collect();
         for id in task_keys {
-            if let Some(task) = tasks.get_mut(&id) {
+            if let Some(task) = released_tasks.get_mut(&id) {
                 if time > task.decryption_time {
                     if task.shares.len() < t as usize{
-                        if (!task.submitted){
-                            submit_share(&web3, index, contract_address, address_sk, &task, lct).await;
+                        if !task.submitted{
+                            submit_share(Arc::clone(&web3), index, contract_address, address_sk, &task, *lct.lock().await).await;
                             task.submitted = true;
                             info!("Share submitted for task id {}.", id);
                         }
                     }
                     else{
                         // enough shares received
-                        tasks.remove(&id);
+                        released_tasks.remove(&id);
                         info!("Task {} removed.", id);
                     }
                 }
             }
         }
+        sleep(Duration::from_secs(2)).await;
     }
-    Ok(())
 }
 // get 10 digit timestamp (in seconds)
 fn get_time() -> u64{
@@ -229,7 +244,7 @@ fn get_time() -> u64{
     return since_the_epoch.as_secs();
 }
 // value unit is eth
-async fn join_committee(web3: &Web3<Http>, contract: Address, agent_pk: &G1Projective, address_sk: &str, value: u64){
+async fn join_committee(web3: Arc<Mutex<Web3<Http>>>, contract: Address, agent_pk: &G1Projective, address_sk: &str, value: u64){
     let public_key = Param{name: "publicKey".to_string(), kind: ParamType::Bytes, internal_type: None};
     let func = ethabi::Function{name: "joinCommittee".to_string(), inputs: vec![public_key], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
     
@@ -237,11 +252,31 @@ async fn join_committee(web3: &Web3<Http>, contract: Address, agent_pk: &G1Proje
     let data = make_data(&func, &vec![pk_data]);
     let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), value: U256::exp10(18)*value, gas: U256::from(8000000), ..Default::default()};
     let prvk = SecretKey::from_str(address_sk).unwrap();
-    let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
-    let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
-    info!("Join committee tx succeeded with hash: {}", result);
+    let web3_released = web3.lock().await;
+    let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+    let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
+    info!("Join committee tx succeeded with hash: {:#x}", result);
 }
-async fn submit_share(web3: &Web3<Http>, index: u64, contract: Address, sk: &str, task: &Task, latsest_confirmed_time: u64){
+async fn get_index(contract: &Contract<Http>, agent_pk: G1Projective) -> Option<u64>{
+    let mut found_agents: u64 = 0;
+    let csize_result: U256 = contract.query("committeeSize", (), None, Options::default(), None).await.unwrap();
+    let committee_size = csize_result.as_u64();
+    
+    let mut counter: u64 = 0;
+    while found_agents < committee_size{
+        let address = get_agent_address(contract, counter).await;
+        if !address.is_zero(){
+            found_agents += 1;
+            let pk = get_agent_pk(contract, &address).await;
+            if pk == agent_pk{
+                return Some(counter);
+            }
+        }
+        counter += 1;
+    }
+    return None;
+}
+async fn submit_share(web3: Arc<Mutex<Web3<Http>>>, index: u64, contract: Address, sk: &str, task: &Task, latsest_confirmed_time: u64){
     let tx_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
     let secret_share = Param{name: "secret_share".to_string(), kind: ParamType::Bytes, internal_type: None};
     let lct = Param{name: "latestConfirmedTime".to_string(), kind: ParamType::Uint(256), internal_type: None};
@@ -253,11 +288,12 @@ async fn submit_share(web3: &Web3<Http>, index: u64, contract: Address, sk: &str
     let data = make_data(&func, &vec![tx_id_data, secret_share_data, lct_data]);
     let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), ..Default::default()};
     let prvk = SecretKey::from_str(sk).unwrap();
-    let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
-    let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
-    info!("Submit share tx succeeded with hash: {}", result.to_string());
+    let web3_released = web3.lock().await;
+    let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+    let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
+    info!("Submit share tx succeeded with hash: {:#x}", result);
 }
-async fn dispute_share(web3: &Web3<Http>, contract: Address, sk: &str, tx_id: u64, member_index: u64){
+async fn dispute_share(web3: Arc<Mutex<Web3<Http>>>, contract: Address, sk: &str, tx_id: u64, member_index: u64){
     let transaction_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
     let member = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
     let func = ethabi::Function{name: "disputeShare".to_string(), inputs: vec![transaction_id, member], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
@@ -266,9 +302,10 @@ async fn dispute_share(web3: &Web3<Http>, contract: Address, sk: &str, tx_id: u6
     let data = make_data(&func, &vec![tx_id_data, member_index_data]);
     let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), ..Default::default()};
     let prvk = SecretKey::from_str(sk).unwrap();
-    let signed = web3.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
-    let result = web3.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
-    info!("Dispute share tx succeeded with hash: {}", result.to_string());
+    let web3_released = web3.lock().await;
+    let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+    let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
+    info!("Dispute share tx succeeded with hash: {:#x}", result);
 }
 async fn get_agent_list(contract: &Contract<Http>) -> HashMap<u64, Agent>{
     let mut agents: HashMap<u64, Agent> = HashMap::new();
