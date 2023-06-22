@@ -57,6 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Initializing...");
     let agent_pk = cryptography::import_pk(&std::env::var("AGENT_PK").expect("AGENT_PK must be set."));
     let agent_sk = cryptography::import_sk(&std::env::var("AGENT_SK").expect("AGENT_SK must be set."));
+    if !(agent_sk*G1Projective::generator() == agent_pk){
+        error!("Agent public key and secret key do not match!");
+    }
     let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
     let address_pk = &std::env::var("ADDRESS_PK").expect("ADDRESS_PK must be set.");
     let contract_address: Address = std::env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set.").parse()?;
@@ -84,6 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let deposit_ether_value = 1;
         join_committee(Arc::clone(&web3), contract_address, &agent_pk, address_sk, deposit_ether_value).await;
     }
+    // TODO: if joining committee, wait for the transaction to finish before getting the ID
     let index = get_index(&contract, agent_pk).await.unwrap(); // Your member index
 
     let mut lct: Arc<Mutex<u64>> = Arc::new(Mutex::new(0u64));
@@ -162,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let task = released_tasks.get_mut(&tx_id).unwrap();
                         task.shares.insert(member, Share{x: member, y: share_point});
                         if task.shares.len() >= t as usize{
-                            info!("Task {} with decryption time {} completed.", tx_id, task.decryption_time);
+                            info!("Task {} with decryption time {} completed at time {}.", tx_id, task.decryption_time, get_time());
                             let tmp_lct = task.decryption_time;
                             released_tasks.remove(&tx_id);
                             let mut is_new_lct: bool = true;
@@ -182,7 +186,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     else{
-                        info!("Invalid share from {} for task {}!", member, tx_id);
+                        info!("Invalid share from agent number {} for task {}!", member, tx_id);
                         dispute_share(Arc::clone(&web3), contract_address, address_sk, tx_id, member).await;
                     }
                 }
@@ -304,6 +308,7 @@ async fn dispute_share(web3: Arc<Mutex<Web3<Http>>>, contract: Address, sk: &str
     let prvk = SecretKey::from_str(sk).unwrap();
     let web3_released = web3.lock().await;
     let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+    // TODO: Error sending dispute: "replacement transaction underpriced" when there are more than one shares to dispute
     let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
     info!("Dispute share tx succeeded with hash: {:#x}", result);
 }
@@ -357,7 +362,6 @@ async fn get_past_events(web3: &Web3<Http>, contract_address: Address, event_sig
 fn setup_logger(log_file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Create a console appender
     let console = ConsoleAppender::builder().build();
-
     // Create a file appender with a custom pattern encoder
     let file = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{d(%Y-%m-%d %H:%M:%S)} [{t}] {l} - {m}{n}")))

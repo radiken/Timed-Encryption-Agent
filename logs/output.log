@@ -1,34 +1,32 @@
-2023-06-16 11:46:12 [main] INFO - Initializing...
-2023-06-16 11:46:12 [main] INFO - Populating agents list.
-2023-06-16 11:46:14 [main] INFO - Initialization completed. Starting main loop.
-2023-06-16 14:02:58 [main] INFO - Initializing...
-2023-06-16 14:02:58 [main] INFO - Populating agents list.
-2023-06-16 14:02:59 [main] INFO - Initialization completed. Starting main loop.
-2023-06-16 14:03:14 [main] INFO - Agent joined event detected. New agent data: [Address(0x4af2eb3e5b1fd9d7ba3f47895354a169dde05bec), Uint(2), Bytes([153, 241, 17, 127, 239, 126, 43, 159, 115, 168, 57, 226, 193, 64, 171, 88, 42, 170, 201, 59, 87, 122, 239, 67, 69, 18, 190, 224, 6, 218, 153, 76, 59, 114, 82, 169, 43, 146, 1, 108, 207, 26, 196, 150, 106, 82, 71, 63])].
-2023-06-16 14:31:30 [main] INFO - Initializing...
-2023-06-16 14:31:30 [main] INFO - Populating agents list.
-2023-06-16 14:31:32 [main] INFO - Initialization completed. Starting main loop.
-2023-06-16 14:47:49 [main] INFO - Agent joined event detected. New agent data: [Address(0x21e0dd95c3c5481ef10422f6826d8d430874f5d7), Uint(3), Bytes([152, 229, 117, 128, 178, 243, 193, 200, 0, 238, 143, 218, 141, 54, 79, 178, 1, 174, 57, 112, 152, 127, 114, 86, 24, 82, 181, 204, 13, 81, 25, 174, 146, 140, 23, 187, 130, 71, 253, 246, 133, 12, 210, 93, 220, 213, 71, 131])].
-2023-06-16 15:28:20 [main] INFO - Initializing...
-2023-06-16 15:28:20 [main] INFO - Populating agents list.
-2023-06-16 15:28:22 [main] INFO - Initialization completed. Starting main loop.
-2023-06-16 15:34:30 [main] INFO - Initializing...
-2023-06-16 15:34:30 [main] INFO - Populating agents list.
-2023-06-16 15:34:32 [main] INFO - Initialization completed. Starting main loop.
-2023-06-16 15:35:01 [main] INFO - Transaction received event detected. Transaction data: [Uint(1), Uint(1686926206), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Array([Bytes([124, 235, 133, 240, 184, 140, 214, 247, 147, 40, 83, 243, 76, 163, 27, 219, 60, 54, 23, 198, 65, 4, 249, 4, 31, 131, 69, 29, 0, 0, 0, 0])])]
-2023-06-16 15:35:01 [main] INFO - Task 1 added to tasks list.
-2023-06-16 15:39:38 [main] INFO - Initializing...
-2023-06-16 15:39:38 [main] INFO - Populating agents list.
-2023-06-16 15:39:40 [main] INFO - Initialization completed. Starting main loop.
-2023-06-16 15:40:01 [main] INFO - Transaction received event detected. Transaction data: [Uint(2), Uint(1686926507), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Array([Bytes([110, 135, 117, 120, 155, 28, 205, 252, 76, 111, 10, 58, 59, 128, 246, 173, 146, 204, 167, 116, 62, 192, 157, 172, 4, 48, 77, 191, 170, 211, 246, 57])])]
-2023-06-16 15:40:01 [main] INFO - Task 2 added to tasks list.
-2023-06-16 15:40:13 [main] INFO - Share received event detected. Share data: [Uint(2), Uint(1), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])]
-2023-06-16 15:49:04 [main] INFO - Initializing...
-2023-06-16 15:49:04 [main] INFO - Populating agents list.
-2023-06-16 15:49:06 [main] INFO - Initialization completed. Starting main loop.
-2023-06-21 14:13:56 [main] INFO - Initializing...
-2023-06-21 14:13:56 [main] INFO - Populating agents list.
-2023-06-21 14:13:58 [main] INFO - Initialization completed. Starting main loop.
 2023-06-21 14:21:37 [main] INFO - Initializing...
 2023-06-21 14:21:37 [main] INFO - Populating agents list.
 2023-06-21 14:21:39 [main] INFO - Initialization completed. Starting main loop.
+2023-06-21 14:31:25 [main] INFO - Transaction received event detected. Transaction data: [Uint(3), Uint(1687354393), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), Array([Bytes([122, 167, 1, 141, 3, 154, 224, 27, 205, 224, 195, 230, 18, 130, 8, 203, 201, 130, 16, 198, 116, 31, 90, 143, 204, 132, 137, 185, 1, 0, 0, 0])])]
+2023-06-21 14:31:25 [main] INFO - Task 3 added to tasks list.
+2023-06-21 14:33:14 [main] INFO - Submit share tx succeeded with hash: 0xc77b4ccac30a51418c82af216cee35865b181bd92da216434e6004978c40de90
+2023-06-21 14:33:14 [main] INFO - Share submitted for task id 3.
+2023-06-21 14:34:37 [main] INFO - Share received event detected. Share data: [Uint(3), Uint(3), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])]
+2023-06-21 14:34:39 [main] INFO - Task 3 with decryption time 1687354393 completed.
+2023-06-21 14:34:39 [main] INFO - Latest confirmed time updated to 1687354393.
+2023-06-21 14:34:39 [main] INFO - Share received event detected. Share data: [Uint(1), Uint(3), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])]
+2023-06-21 14:34:41 [main] INFO - Share received event detected. Share data: [Uint(2), Uint(3), Bytes([192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])]
+2023-06-21 15:18:34 [main] INFO - Initializing...
+2023-06-21 15:18:34 [main] INFO - Populating agents list.
+2023-06-21 15:18:36 [main] INFO - Initialization completed. Starting main loop.
+2023-06-21 15:20:25 [main] INFO - Transaction received event detected. Transaction data: [Uint(4), Uint(1687357256), Bytes([151, 139, 58, 134, 222, 252, 70, 97, 163, 147, 127, 252, 157, 107, 164, 230, 47, 97, 120, 216, 18, 112, 6, 1, 131, 117, 194, 145, 226, 193, 206, 38, 168, 161, 169, 140, 158, 75, 254, 178, 59, 179, 96, 225, 6, 60, 217, 100]), Bytes([141, 218, 217, 187, 74, 93, 7, 105, 227, 35, 234, 37, 211, 122, 58, 183, 114, 7, 50, 207, 22, 99, 152, 29, 145, 9, 173, 64, 204, 119, 19, 204, 44, 91, 148, 121, 28, 78, 246, 167, 70, 62, 59, 131, 106, 199, 11, 141, 18, 114, 215, 60, 159, 148, 45, 193, 9, 215, 253, 7, 235, 100, 68, 68, 201, 76, 86, 234, 179, 25, 149, 198, 130, 210, 121, 1, 160, 251, 122, 59, 91, 140, 112, 196, 30, 50, 162, 222, 29, 220, 68, 78, 143, 98, 68, 184]), Array([Bytes([58, 80, 43, 248, 21, 46, 85, 180, 146, 143, 25, 31, 40, 229, 36, 193, 255, 180, 136, 159, 138, 149, 147, 3, 224, 6, 48, 65, 82, 167, 237, 115])])]
+2023-06-21 15:20:26 [main] INFO - Task 4 added to tasks list.
+2023-06-21 15:20:59 [main] INFO - Submit share tx succeeded with hash: 0x45993612ab25302c774ee866789ea910569cef676450378bcac4ed1d23200609
+2023-06-21 15:20:59 [main] INFO - Share submitted for task id 4.
+2023-06-21 15:26:01 [main] INFO - Share received event detected. Share data: [Uint(2), Uint(4), Bytes([165, 180, 173, 101, 106, 219, 140, 241, 67, 25, 250, 180, 65, 2, 49, 123, 23, 30, 199, 47, 196, 16, 216, 155, 108, 23, 242, 189, 6, 136, 86, 94, 73, 82, 93, 161, 178, 74, 240, 118, 36, 132, 93, 76, 238, 87, 230, 156])]
+2023-06-21 15:26:01 [main] INFO - Invalid share from 2 for task 4!
+2023-06-21 15:26:02 [main] INFO - Dispute share tx succeeded with hash: 0x93c11d0fc94d43349abcdeec4dbd928b898eb35ce4364c0beef22879b29ef40f
+2023-06-21 15:26:02 [main] INFO - Share received event detected. Share data: [Uint(3), Uint(4), Bytes([162, 178, 206, 36, 214, 222, 18, 35, 73, 195, 151, 79, 237, 235, 253, 114, 173, 235, 195, 78, 186, 16, 21, 112, 21, 177, 226, 120, 230, 198, 203, 80, 68, 210, 10, 203, 182, 8, 49, 190, 175, 92, 196, 75, 140, 25, 99, 143])]
+2023-06-21 15:26:04 [main] INFO - Invalid share from 3 for task 4!
+2023-06-21 16:41:26 [main] INFO - Initializing...
+2023-06-21 16:41:26 [main] INFO - Populating agents list.
+2023-06-21 16:41:28 [main] INFO - Initialization completed. Starting main loop.
+2023-06-21 16:41:55 [main] INFO - Initializing...
+2023-06-21 16:41:55 [main] INFO - Populating agents list.
+2023-06-21 16:44:06 [main] INFO - Initializing...
+2023-06-21 16:45:23 [main] INFO - Initializing...
+2023-06-21 17:09:22 [main] INFO - Initializing...

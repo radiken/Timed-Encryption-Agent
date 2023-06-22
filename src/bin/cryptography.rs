@@ -9,11 +9,14 @@ use aes_gcm_siv::{Aes256GcmSiv, KeyInit, aead::{Aead, generic_array::GenericArra
 
 fn main() {
     let (sks, pks) = batch_get_keypairs(4);
-    println!("sks: {:?}", sks);
+    let exported_sks: Vec<String> = sks.clone().into_iter().map(|sk| export_sk(&sk)).collect();
+    println!("sks: {:?}", exported_sks);
     let exported_pks: Vec<String> = pks.clone().into_iter().map(|pk| export_pk(&pk)).collect();
     println!("pks: {:?}", exported_pks);
     let imported_pks: Vec<G1Projective> = exported_pks.clone().into_iter().map(|pk| import_pk(&pk)).collect();
-    println!("Import export test: {:?}", pks==imported_pks);
+    println!("PK Import export correctness: {:?}", pks==imported_pks);
+    let recovered_sk = import_sk(&export_sk(&sks[0]));
+    println!("SK Import export correctness: {:?}", sks[0]==recovered_sk);
 
     let r = gen_r();
     // println!("r: {:?}", r);
@@ -53,9 +56,6 @@ fn main() {
     let ciphertext = encrypt(msg, &key, nonce);
     let plaintext: [u8; 28] = decrypt(&ciphertext, &key, nonce)[0..28].try_into().unwrap();
     println!("Encryption correctness: {:?}", *msg==plaintext);
-
-
-
 }
 
 pub fn import_pk(pk: &str) -> G1Projective{
@@ -74,11 +74,12 @@ pub fn export_pk(pk: &G1Projective) -> String{
 pub fn import_sk(sk: &str) -> Scalar{
     let bytes = hex::decode(sk).unwrap();
     let array = bytes[..32].try_into().map_err(|_| base64::DecodeError::InvalidLength).unwrap();
-    Scalar::from_bytes(&bytes_to_le(array)).unwrap()
+    Scalar::from_bytes(&array).unwrap()
 }
 
 pub fn export_sk(sk: &Scalar) -> String{
-    sk.to_string()
+    let bytes = sk.to_bytes();
+    return hex::encode(bytes);
 }
 
 fn batch_get_keypairs(number: u8) -> (Vec<Scalar>, Vec<G1Projective>){
