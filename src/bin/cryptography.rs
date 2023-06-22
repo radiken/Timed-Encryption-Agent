@@ -218,7 +218,7 @@ pub fn verify_share(share_point: &G1Projective, pk: &G1Projective, g2r: &G2Proje
     let share_affine = G1Affine::from(share_point);
     let pk_affine = G1Affine::from(pk);
     let g2r_affine = G2Affine::from(g2r);
-    return pairing(&share_affine, &G2Affine::identity()) == pairing(&pk_affine, &g2r_affine);
+    return pairing(&share_affine, &G2Affine::generator()) == pairing(&pk_affine, &g2r_affine);
 }
 
 fn share_point_to_secret_share(share_point: &G1Projective, alpha: &Scalar) -> Scalar{
