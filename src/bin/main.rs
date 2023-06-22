@@ -86,8 +86,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !in_committee{
         let deposit_ether_value = 1;
         join_committee(Arc::clone(&web3), contract_address, &agent_pk, address_sk, deposit_ether_value).await;
+        info!("Joining committee.");
+        while get_index(&contract, agent_pk).await.is_none(){
+            sleep(Duration::from_secs(5)).await;
+        }
     }
-    // TODO: if joining committee, wait for the transaction to finish before getting the ID
     let index = get_index(&contract, agent_pk).await.unwrap(); // Your member index
 
     let mut lct: Arc<Mutex<u64>> = Arc::new(Mutex::new(0u64));
