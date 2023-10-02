@@ -93,7 +93,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let index = get_index(&contract, agent_pk).await.unwrap(); // Your member index
 
-    let mut lct: Arc<Mutex<u64>> = Arc::new(Mutex::new(0u64));
     // Create event filter
     let event1 = "transactionReceived(uint256,uint256,bytes,bytes,bytes[])";
     let event2 = "shareRecieved(uint256,uint256,bytes)";
@@ -120,9 +119,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Read every 1 sec
     let logs_stream = filter.stream(time::Duration::from_secs(1));
     futures::pin_mut!(logs_stream);
-    // Main loop
     info!("Initialization completed. Starting main loop.");
-    tokio::spawn(loop_tasks(Arc::clone(&tasks), t, index, Arc::clone(&web3), contract_address, Arc::clone(&lct)));
+    // Secret shares submittion loop
+    tokio::spawn(loop_tasks(Arc::clone(&tasks), t, index, Arc::clone(&web3), contract_address));
+    // Listen to events loop
     loop{
         let log = logs_stream.next().await.unwrap();
         if let Ok(tx_log) = log {
@@ -170,22 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         task.shares.insert(member, Share{x: member, y: share_point});
                         if task.shares.len() >= t as usize{
                             info!("Task {} with decryption time {} completed at time {}.", tx_id, task.decryption_time, get_time());
-                            let tmp_lct = task.decryption_time;
                             released_tasks.remove(&tx_id);
-                            let mut is_new_lct: bool = true;
-                            let task_keys: Vec<u64> = released_tasks.keys().cloned().collect();
-                            for id in task_keys {
-                                if let Some(task) = released_tasks.get_mut(&id) {
-                                    if task.decryption_time < tmp_lct{
-                                        is_new_lct = false;
-                                    }
-                                }
-                            }
-                            let mut released_lct = lct.lock().await;
-                            if is_new_lct && (tmp_lct > *released_lct){
-                                *released_lct = tmp_lct;
-                                info!("Latest confirmed time updated to {}.", *released_lct);
-                            }
                         }
                     }
                     else{
@@ -217,7 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
-async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: i32, index: u64, web3: Arc<Mutex<Web3<Http>>>, contract_address: Address, lct: Arc<Mutex<u64>>){
+async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: i32, index: u64, web3: Arc<Mutex<Web3<Http>>>, contract_address: Address){
     let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
     loop{
         let time = get_time();
@@ -228,7 +213,7 @@ async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: i32, index: u64, w
                 if time > task.decryption_time {
                     if task.shares.len() < t as usize{
                         if !task.submitted{
-                            submit_share(Arc::clone(&web3), index, contract_address, address_sk, &task, *lct.lock().await).await;
+                            submit_share(Arc::clone(&web3), index, contract_address, address_sk, &task).await;
                             task.submitted = true;
                             info!("Share submitted for task id {}.", id);
                         }
@@ -283,16 +268,14 @@ async fn get_index(contract: &Contract<Http>, agent_pk: G1Projective) -> Option<
     }
     return None;
 }
-async fn submit_share(web3: Arc<Mutex<Web3<Http>>>, index: u64, contract: Address, sk: &str, task: &Task, latsest_confirmed_time: u64){
+async fn submit_share(web3: Arc<Mutex<Web3<Http>>>, index: u64, contract: Address, sk: &str, task: &Task){
     let tx_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
     let secret_share = Param{name: "secret_share".to_string(), kind: ParamType::Bytes, internal_type: None};
-    let lct = Param{name: "latestConfirmedTime".to_string(), kind: ParamType::Uint(256), internal_type: None};
-    let func = ethabi::Function{name: "submitShare".to_string(), inputs: vec![tx_id, secret_share, lct], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
+    let func = ethabi::Function{name: "submitShare".to_string(), inputs: vec![tx_id, secret_share], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
     
     let tx_id_data = Token::Uint(Uint::from(task.id));
     let secret_share_data = Token::Bytes(ethabi::Bytes::from(get_share_bytes(task, index)));
-    let lct_data = Token::Uint(Uint::from(latsest_confirmed_time));
-    let data = make_data(&func, &vec![tx_id_data, secret_share_data, lct_data]);
+    let data = make_data(&func, &vec![tx_id_data, secret_share_data]);
     let web3_released = web3.lock().await;
     let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*11/10)), ..Default::default()};
     let prvk = SecretKey::from_str(sk).unwrap();
