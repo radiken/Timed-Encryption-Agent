@@ -211,7 +211,7 @@ async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: i32, index: u64, w
         for id in task_keys {
             if let Some(task) = released_tasks.get_mut(&id) {
                 if time > task.decryption_time {
-                    if task.shares.len() < t as usize{
+                    if task.shares.len() <= t as usize{
                         if !task.submitted{
                             submit_share(Arc::clone(&web3), index, contract_address, address_sk, &task).await;
                             task.submitted = true;
