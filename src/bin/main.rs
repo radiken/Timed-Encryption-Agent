@@ -242,9 +242,9 @@ async fn join_committee(web3: Arc<Mutex<Web3<Http>>>, contract: Address, agent_p
     
     let pk_data = Token::Bytes(ethabi::Bytes::from(agent_pk.to_affine().to_compressed()));
     let data = make_data(&func, &vec![pk_data]);
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), value: U256::exp10(18)*value, gas: U256::from(8000000), ..Default::default()};
-    let prvk = SecretKey::from_str(address_sk).unwrap();
     let web3_released = web3.lock().await;
+    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), value: U256::exp10(18)*value, gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
+    let prvk = SecretKey::from_str(address_sk).unwrap();
     let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
     let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
     info!("Join committee tx succeeded with hash: {:#x}", result);
@@ -277,7 +277,7 @@ async fn submit_share(web3: Arc<Mutex<Web3<Http>>>, index: u64, contract: Addres
     let secret_share_data = Token::Bytes(ethabi::Bytes::from(get_share_bytes(task, index)));
     let data = make_data(&func, &vec![tx_id_data, secret_share_data]);
     let web3_released = web3.lock().await;
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*11/10)), ..Default::default()};
+    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
     let prvk = SecretKey::from_str(sk).unwrap();
     let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
     let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
@@ -291,7 +291,7 @@ async fn dispute_share(web3: Arc<Mutex<Web3<Http>>>, contract: Address, sk: &str
     let member_index_data = Token::Uint(Uint::from(member_index));
     let data = make_data(&func, &vec![tx_id_data, member_index_data]);
     let web3_released = web3.lock().await;
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*11/10)), ..Default::default()};
+    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
     let prvk = SecretKey::from_str(sk).unwrap();
     let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
     // TODO: Error sending dispute: "replacement transaction underpriced" when there are more than one shares to dispute
