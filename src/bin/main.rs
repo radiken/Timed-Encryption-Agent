@@ -237,16 +237,20 @@ fn get_time() -> u64{
 }
 // value unit is eth
 async fn join_committee(web3: Arc<Mutex<Web3<Http>>>, contract: Address, agent_pk: &G1Projective, address_sk: &str, value: u64){
-    let public_key = Param{name: "publicKey".to_string(), kind: ParamType::Bytes, internal_type: None};
-    let func = ethabi::Function{name: "joinCommittee".to_string(), inputs: vec![public_key], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
-    
-    let pk_data = Token::Bytes(ethabi::Bytes::from(agent_pk.to_affine().to_compressed()));
-    let data = make_data(&func, &vec![pk_data]);
-    let web3_released = web3.lock().await;
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), value: U256::exp10(18)*value, gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
-    let prvk = SecretKey::from_str(address_sk).unwrap();
-    let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
-    let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
+    let mut result = H256::zero();
+    while result == H256::zero(){
+        let public_key = Param{name: "publicKey".to_string(), kind: ParamType::Bytes, internal_type: None};
+        let func = ethabi::Function{name: "joinCommittee".to_string(), inputs: vec![public_key], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
+        
+        let pk_data = Token::Bytes(ethabi::Bytes::from(agent_pk.to_affine().to_compressed()));
+        let data = make_data(&func, &vec![pk_data]);
+        let web3_released = web3.lock().await;
+        let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), value: U256::exp10(18)*value, gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
+        let prvk = SecretKey::from_str(address_sk).unwrap();
+        let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+        result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap_or(H256::zero());
+        sleep(Duration::from_secs(1)).await;
+    }
     info!("Join committee tx succeeded with hash: {:#x}", result);
 }
 async fn get_index(contract: &Contract<Http>, agent_pk: G1Projective) -> Option<u64>{
@@ -269,33 +273,40 @@ async fn get_index(contract: &Contract<Http>, agent_pk: G1Projective) -> Option<
     return None;
 }
 async fn submit_share(web3: Arc<Mutex<Web3<Http>>>, index: u64, contract: Address, sk: &str, task: &Task){
-    let tx_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
-    let secret_share = Param{name: "secret_share".to_string(), kind: ParamType::Bytes, internal_type: None};
-    let func = ethabi::Function{name: "submitShare".to_string(), inputs: vec![tx_id, secret_share], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
-    
-    let tx_id_data = Token::Uint(Uint::from(task.id));
-    let secret_share_data = Token::Bytes(ethabi::Bytes::from(get_share_bytes(task, index)));
-    let data = make_data(&func, &vec![tx_id_data, secret_share_data]);
-    let web3_released = web3.lock().await;
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
-    let prvk = SecretKey::from_str(sk).unwrap();
-    let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
-    let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
+    let mut result = H256::zero();
+    while result == H256::zero(){
+        let tx_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
+        let secret_share = Param{name: "secret_share".to_string(), kind: ParamType::Bytes, internal_type: None};
+        let func = ethabi::Function{name: "submitShare".to_string(), inputs: vec![tx_id, secret_share], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
+        
+        let tx_id_data = Token::Uint(Uint::from(task.id));
+        let secret_share_data = Token::Bytes(ethabi::Bytes::from(get_share_bytes(task, index)));
+        let data = make_data(&func, &vec![tx_id_data, secret_share_data]);
+        let web3_released = web3.lock().await;
+        let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
+        let prvk = SecretKey::from_str(sk).unwrap();
+        let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+        result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap_or(H256::zero());
+        sleep(Duration::from_secs(1)).await;
+    }
     info!("Submit share tx succeeded with hash: {:#x}", result);
 }
 async fn dispute_share(web3: Arc<Mutex<Web3<Http>>>, contract: Address, sk: &str, tx_id: u64, member_index: u64){
-    let transaction_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
-    let member = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
-    let func = ethabi::Function{name: "disputeShare".to_string(), inputs: vec![transaction_id, member], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
-    let tx_id_data = Token::Uint(Uint::from(tx_id));
-    let member_index_data = Token::Uint(Uint::from(member_index));
-    let data = make_data(&func, &vec![tx_id_data, member_index_data]);
-    let web3_released = web3.lock().await;
-    let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
-    let prvk = SecretKey::from_str(sk).unwrap();
-    let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
-    // TODO: Error sending dispute: "replacement transaction underpriced" when there are more than one shares to dispute
-    let result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap();
+    let mut result = H256::zero();
+    while result == H256::zero(){
+        let transaction_id = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
+        let member = Param{name: "transactionID".to_string(), kind: ParamType::Uint(256), internal_type: None};
+        let func = ethabi::Function{name: "disputeShare".to_string(), inputs: vec![transaction_id, member], outputs: vec![], state_mutability: ethabi::StateMutability::NonPayable, constant: None};
+        let tx_id_data = Token::Uint(Uint::from(tx_id));
+        let member_index_data = Token::Uint(Uint::from(member_index));
+        let data = make_data(&func, &vec![tx_id_data, member_index_data]);
+        let web3_released = web3.lock().await;
+        let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
+        let prvk = SecretKey::from_str(sk).unwrap();
+        let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
+        result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap_or(H256::zero());
+        sleep(Duration::from_secs(1)).await;
+    }
     info!("Dispute share tx succeeded with hash: {:#x}", result);
 }
 async fn get_agent_list(contract: &Contract<Http>) -> HashMap<u64, Agent>{
