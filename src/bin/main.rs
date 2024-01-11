@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let index = get_index(&contract, agent_pk).await.unwrap(); // Your member index
 
     // Create event filter
-    let event1 = "transactionReceived(uint256,uint256,bytes,bytes,bytes[])";
+    let event1 = "requestReceived(uint256,address,bytes,uint256,bytes,bytes,bytes[])";
     let event2 = "shareRecieved(uint256,uint256,bytes)";
     let event3 = "memberJoined(address,uint256,bytes)";
     let event4 = "memberExited(uint256)";
@@ -108,7 +108,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         event_topics.push(H256(result));
     }
 
-    // let past_events = get_past_events(&web3, contract_address, event_topics.clone(), 3365860, 3370760).await;
+    // let past_events = get_past_events(Arc::clone(&web3), contract_address, event_topics.clone(), 5018400, 5018402).await;
+    // println!("Past events: {:?}", past_events);
 
     let filter = web3::types::FilterBuilder::default()
         .address(vec![contract_address])
@@ -133,9 +134,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 info!("Transaction received event detected. Transaction data: {:?}", data);
                 // convert data
                 let id = data[0].clone().into_uint().unwrap().as_u64();
-                let decryption_time = data[1].clone().into_uint().unwrap().as_u64();
-                let g1r: [u8; 48] = data[2].clone().into_bytes().unwrap()[..48].try_into().unwrap();
-                let g2r: [u8; 96] = data[3].clone().into_bytes().unwrap()[..96].try_into().unwrap();
+                // data[1] is sender
+                // data[2] is message hash
+                let decryption_time = data[3].clone().into_uint().unwrap().as_u64();
+                let g1r: [u8; 48] = data[4].clone().into_bytes().unwrap()[..48].try_into().unwrap();
+                let g2r: [u8; 96] = data[5].clone().into_bytes().unwrap()[..96].try_into().unwrap();
                 // TODO: This (below) can go wrong. Handle exception here.
                 let g1r_point = G1Projective::from(G1Affine::from_compressed(&g1r).unwrap());
                 let g2r_point = G2Projective::from(G2Affine::from_compressed(&g2r).unwrap());
@@ -343,15 +346,15 @@ fn get_share_bytes(task: &Task, index: u64) -> [u8; 48]{
     task.shares.get(&index).unwrap().y.to_affine().to_compressed()
 }
 
-async fn get_past_events(web3: &Web3<Http>, contract_address: Address, event_signatures: Vec<H256>, from_block: u64, to_block: u64) -> Vec<Log>{
+async fn get_past_events(web3: Arc<Mutex<Web3<Http>>>, contract_address: Address, event_signatures: Vec<H256>, from_block: u64, to_block: u64) -> Vec<Log>{
     let filter = FilterBuilder::default()
         .address(vec![contract_address])
         .topics(Some(event_signatures), None, None, None)
         .from_block(web3::types::BlockNumber::from(from_block))
         .to_block(web3::types::BlockNumber::from(to_block))
         .build();
-
-    let past_events: Vec<Log> = web3.eth().logs(filter).await.unwrap();
+    let web3_released = web3.lock().await;
+    let past_events: Vec<Log> = web3_released.eth().logs(filter).await.unwrap();
     return past_events;
 }
 
