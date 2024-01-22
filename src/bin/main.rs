@@ -63,8 +63,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
     let address_pk = &std::env::var("ADDRESS_PK").expect("ADDRESS_PK must be set.");
     let contract_address: Address = std::env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set.").parse()?;
-    let n = 3;
-    let t = 2;
     let url = std::env::var("API_URL").expect("API_URL must be set.");
     // Create web3 instance
     let web3 = Arc::new(Mutex::new(Web3::new(web3::transports::Http::new(&url)?)));
@@ -74,6 +72,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tasks: Arc<Mutex<HashMap<u64, Task>>> = Arc::new(Mutex::new(HashMap::new()));
     info!("Populating agents list.");
     let mut agents: HashMap<u64, Agent> = get_agent_list(&contract).await;
+
+    let n = 3;
+    let t = 2;
+    let event1 = "requestReceived(uint256,address,bytes,uint256,bytes,bytes,bytes[])";
+    let event2 = "shareRecieved(uint256,uint256,bytes)";
+    let event3 = "memberJoined(address,uint256,bytes)";
+    let event4 = "memberExited(uint256)";
+    let events = [event1, event2, event3, event4];
 
     // Join committee if myself not in agents list
     let mut in_committee = false;
@@ -94,11 +100,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let index = get_index(&contract, agent_pk).await.unwrap(); // Your member index
 
     // Create event filter
-    let event1 = "requestReceived(uint256,address,bytes,uint256,bytes,bytes,bytes[])";
-    let event2 = "shareRecieved(uint256,uint256,bytes)";
-    let event3 = "memberJoined(address,uint256,bytes)";
-    let event4 = "memberExited(uint256)";
-    let events = [event1, event2, event3, event4];
     let mut event_topics = vec![];
     for event in events{
         let mut hasher = Keccak::v256();
@@ -108,7 +109,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         event_topics.push(H256(result));
     }
 
-    // let past_events = get_past_events(Arc::clone(&web3), contract_address, event_topics.clone(), 5018400, 5018402).await;
+    // let past_events = get_past_events(Arc::clone(&web3), contract_address, event_topics.clone(), 5047727, 5133546).await;
     // println!("Past events: {:?}", past_events);
 
     let filter = web3::types::FilterBuilder::default()
@@ -117,8 +118,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
     // Create a stream for the event
     let filter = web3.lock().await.eth_filter().create_logs_filter(filter).await?;
+    
+    // inspect pass messages
+    let current_block_number = web3.lock().await.eth().block_number().await.unwrap().as_u64();
+    let past_events = get_past_events(Arc::clone(&web3), contract_address, event_topics.clone(), 0, current_block_number).await;
+    let mut released_tasks = tasks.lock().await;
+    for message in past_events{
+        let raw_data = &message.data.0[..];
+        if message.topics[0] == event_topics[0] {
+            let data = ethabi::decode(&[ParamType::Uint(256), ParamType::Address, ParamType::Bytes, ParamType::Uint(256), ParamType::Bytes, ParamType::Bytes, ParamType::Array(Box::new(ParamType::Bytes))], raw_data).unwrap();
+            let id = data[0].clone().into_uint().unwrap().as_u64();
+            let result: (U256, U256, U256) = contract.query("messages", (Token::Uint(Uint::from(id)), ), None, Options::default(), None).await.unwrap();
+            // result.2 is shareReceived
+            if result.2.as_u64() < t{
+                let decryption_time = data[3].clone().into_uint().unwrap().as_u64();
+                let g1r: [u8; 48] = data[4].clone().into_bytes().unwrap()[..48].try_into().unwrap();
+                let g2r: [u8; 96] = data[5].clone().into_bytes().unwrap()[..96].try_into().unwrap();
+                // TODO: This (below) can go wrong if client is malicious. Handle exception here.
+                let g1r_point = G1Projective::from(G1Affine::from_compressed(&g1r).unwrap());
+                let g2r_point = G2Projective::from(G2Affine::from_compressed(&g2r).unwrap());
+                let alphas: Vec<Vec<u8>> = data[6].clone().into_array().unwrap().into_iter().map(|holder| holder.into_bytes().unwrap()).collect();
+                let mut alphas_bytes = vec![];
+                for alpha in alphas{
+                    let bytes: [u8; 32] = alpha[..32].try_into().unwrap();
+                    alphas_bytes.push(Scalar::from_bytes(&bytes).unwrap());
+                }
+                let mut shares: HashMap<u64, Share> = HashMap::new();
+                shares.insert(index, Share{x: index, y: cryptography::node_get_share(&agent_sk, &g1r_point)});
+                // push task
+                let task = Task{id, decryption_time, g1r: g1r_point, g2r: g2r_point, alphas: alphas_bytes, shares, submitted: false};
+                released_tasks.insert(id, task);
+            }
+        }
+    }
+    info!("Number of existing tasks found: {}", released_tasks.len());
+    drop(released_tasks);
+
     // Read every 1 sec
-    let logs_stream = filter.stream(time::Duration::from_secs(1));
+    let logs_stream = filter.clone().stream(time::Duration::from_secs(1));
     futures::pin_mut!(logs_stream);
     info!("Initialization completed. Starting main loop.");
     // Secret shares submittion loop
@@ -142,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // TODO: This (below) can go wrong if client is malicious. Handle exception here.
                 let g1r_point = G1Projective::from(G1Affine::from_compressed(&g1r).unwrap());
                 let g2r_point = G2Projective::from(G2Affine::from_compressed(&g2r).unwrap());
-                let alphas: Vec<Vec<u8>> = data[4].clone().into_array().unwrap().into_iter().map(|holder| holder.into_bytes().unwrap()).collect();
+                let alphas: Vec<Vec<u8>> = data[6].clone().into_array().unwrap().into_iter().map(|holder| holder.into_bytes().unwrap()).collect();
                 let mut alphas_bytes = vec![];
                 for alpha in alphas{
                     let bytes: [u8; 32] = alpha[..32].try_into().unwrap();
@@ -202,10 +239,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 agents.remove(&index);
             }
         }
+        else {
+            // stop the stream
+            filter.clone().uninstall().await?;
+            // recreate the filter in case of an error
+            let filter = web3::types::FilterBuilder::default()
+                .address(vec![contract_address])
+                .topics(Some(event_topics.clone()), None, None, None)
+                .build();
+            // Create a stream for the event
+            let filter = web3.lock().await.eth_filter().create_logs_filter(filter).await?;
+            // Read every 1 sec
+            let logs_stream = filter.stream(time::Duration::from_secs(1));
+            futures::pin_mut!(logs_stream);
+        }
     }
     Ok(())
 }
-async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: i32, index: u64, web3: Arc<Mutex<Web3<Http>>>, contract_address: Address){
+async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: u64, index: u64, web3: Arc<Mutex<Web3<Http>>>, contract_address: Address){
     let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
     loop{
         let time = get_time();
@@ -353,8 +404,8 @@ async fn get_past_events(web3: Arc<Mutex<Web3<Http>>>, contract_address: Address
         .from_block(web3::types::BlockNumber::from(from_block))
         .to_block(web3::types::BlockNumber::from(to_block))
         .build();
-    let web3_released = web3.lock().await;
-    let past_events: Vec<Log> = web3_released.eth().logs(filter).await.unwrap();
+    let base_filter = web3.lock().await.eth_filter().create_logs_filter(filter).await.unwrap();
+    let past_events: Vec<Log> = base_filter.logs().await.unwrap();
     return past_events;
 }
 
