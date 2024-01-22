@@ -130,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let raw_data = &tx_log.data.0[..];
             if tx_log.topics[0] == event_topics[0] {
                 // transaction received
-                let data = ethabi::decode(&[ParamType::Uint(256), ParamType::Uint(256), ParamType::Bytes, ParamType::Bytes, ParamType::Array(Box::new(ParamType::Bytes))], raw_data).unwrap();
+                let data = ethabi::decode(&[ParamType::Uint(256), ParamType::Address, ParamType::Bytes, ParamType::Uint(256), ParamType::Bytes, ParamType::Bytes, ParamType::Array(Box::new(ParamType::Bytes))], raw_data).unwrap();
                 info!("Transaction received event detected. Transaction data: {:?}", data);
                 // convert data
                 let id = data[0].clone().into_uint().unwrap().as_u64();
@@ -139,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let decryption_time = data[3].clone().into_uint().unwrap().as_u64();
                 let g1r: [u8; 48] = data[4].clone().into_bytes().unwrap()[..48].try_into().unwrap();
                 let g2r: [u8; 96] = data[5].clone().into_bytes().unwrap()[..96].try_into().unwrap();
-                // TODO: This (below) can go wrong. Handle exception here.
+                // TODO: This (below) can go wrong if client is malicious. Handle exception here.
                 let g1r_point = G1Projective::from(G1Affine::from_compressed(&g1r).unwrap());
                 let g2r_point = G2Projective::from(G2Affine::from_compressed(&g2r).unwrap());
                 let alphas: Vec<Vec<u8>> = data[4].clone().into_array().unwrap().into_iter().map(|holder| holder.into_bytes().unwrap()).collect();
