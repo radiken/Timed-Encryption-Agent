@@ -1,10 +1,8 @@
 use group::Curve;
-use itertools::Itertools;
 use secp256k1::SecretKey;
 use std::str::FromStr;
 use std::convert::TryInto;
 use std::time;
-use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::HashMap;
 use std::fs::File;
@@ -13,7 +11,7 @@ use tokio::sync::Mutex;
 use dotenv::dotenv;
 use web3::transports::Http;
 use web3::types::{Address, H256, TransactionParameters, Bytes, U256, FilterBuilder, Log};
-use web3::{Web3};
+use web3::Web3;
 use web3::contract::{Contract, Options};
 use futures::StreamExt;
 use tiny_keccak::{Hasher, Keccak};
@@ -74,12 +72,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let f = File::open("./contract_abi")?;
     let ethabi_contract = ethabi::Contract::load(f)?;
     let contract = Contract::new(web3.lock().await.eth(), contract_address, ethabi_contract);
-    let mut tasks: Arc<Mutex<HashMap<u64, Task>>> = Arc::new(Mutex::new(HashMap::new()));
+    let tasks: Arc<Mutex<HashMap<u64, Task>>> = Arc::new(Mutex::new(HashMap::new()));
     info!("Populating agents list.");
     let mut agents: HashMap<u64, Agent> = get_agent_list(&contract).await;
 
-    let n = 3;
-    let t = 2;
+    let threshold: U256 = (&contract).query("THRESHOLD", (), None, Options::default(), None).await.unwrap();
+    let t = threshold.as_u64();
+
     let event1 = "requestReceived(uint256,address,bytes,uint256,bytes,bytes,bytes[])";
     let event2 = "shareRecieved(uint256,uint256,bytes)";
     let event3 = "memberJoined(address,uint256,bytes)";
@@ -103,6 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let index = get_index(&contract, agent_pk).await.unwrap(); // Your member index
+    agents.insert(index, Agent{id: index, address: address_pk, pk: agent_pk});
 
     // Create event filter
     let mut event_topics = vec![];
@@ -231,7 +231,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let share_point = G1Projective::from(G1Affine::from_compressed(&share).unwrap());
                 // verify and save shares
                 let mut released_tasks = tasks.lock().await;
-                if released_tasks.get(&tx_id).is_some(){
+                if released_tasks.get(&tx_id).is_some() && member != index{
                     if cryptography::verify_share(&share_point, &agents.get(&member).unwrap().pk, &released_tasks.get(&tx_id).unwrap().g2r){
                         let task = released_tasks.get_mut(&tx_id).unwrap();
                         task.shares.insert(member, Share{x: member, y: share_point});
@@ -278,7 +278,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             event_listener = Box::pin(replacement_logs_stream);
         }
     }
-    Ok(())
 }
 async fn loop_tasks(tasks: Arc<Mutex<HashMap<u64, Task>>>, t: u64, index: u64, web3: Arc<Mutex<Web3<Http>>>, contract_address: Address){
     let address_sk = &std::env::var("ADDRESS_SK").expect("ADDRESS_SK must be set.");
@@ -361,7 +360,12 @@ async fn submit_share(web3: Arc<Mutex<Web3<Http>>>, index: u64, contract: Addres
         let secret_share_data = Token::Bytes(ethabi::Bytes::from(get_share_bytes(task, index)));
         let data = make_data(&func, &vec![tx_id_data, secret_share_data]);
         let web3_released = web3.lock().await;
-        let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(web3_released.eth().gas_price().await.unwrap()*15/10)), ..Default::default()};
+        let mut gas_price: U256 = U256::from(0);
+        while gas_price == U256::from(0){
+            gas_price = web3_released.eth().gas_price().await.unwrap_or(U256::from(0));
+            sleep(Duration::from_secs(1)).await;
+        }
+        let tx_object = TransactionParameters{to: Some(contract), data: Bytes::from(data), gas: U256::from(8000000), gas_price: Some(U256::from(gas_price*15/10)), ..Default::default()};
         let prvk = SecretKey::from_str(sk).unwrap();
         let signed = web3_released.accounts().sign_transaction(tx_object, &prvk).await.unwrap();
         result = web3_released.eth().send_raw_transaction(signed.raw_transaction).await.unwrap_or(H256::zero());
